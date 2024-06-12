@@ -16,6 +16,7 @@ from fastapi import (
     Header,
     Path,
     Query,
+    BackgroundTasks,
 )
 from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import (
@@ -28,7 +29,64 @@ from starlette.exceptions import HTTPException as StarleteHTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
-app = FastAPI()
+
+from fastapi import FastAPI
+
+description = """
+Various APIs that are built for learning purposes using Tutorial
+
+## Sending Data
+Shows different ways to send data using FASTAPI such as:-
+* **Path Params**
+* **Query Params**
+* **Request Body**
+* **File Uploads**
+* **Cookie**
+* **Headers**
+* **etc.**
+
+## Other Concepts
+Shows different concepts such as:- 
+* **Dependencies**
+* **Database**
+* **Security**
+* **etc.**
+    
+"""
+tags_metadata = [
+    {
+        "name": "users",
+        "description": "Operations with users. The **login** logic is also here.",
+    },
+    {
+        "name": "items",
+        "description": "Manage items. So _fancy_ they have their own docs.",
+        "externalDocs": {
+            "description": "Items external docs",
+            "url": "https://fastapi.tiangolo.com/",
+        },
+    },
+]
+
+
+app = FastAPI(
+    title="FASTAPITutorialApp",
+    summary="The FASTAPI Tutorial App",
+    description=description,
+    version="0.1.0",
+    terms_of_service="https://www.fastapi.com/terms/",
+    contact={
+        "name": "Lodger Mtui",
+        "url": "https://www.lodgmtui.com",
+        "email": "lodgmtui@gmail.com",
+    },
+    license_info={
+        "name": "Apache 2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+        "identifier": "MIT",
+    },
+    openapi_tags=tags_metadata,
+)
 
 
 #: PATH PARAMS
@@ -89,7 +147,7 @@ async def get_user_id(
 # * Path Parameters and Numeric Validation
 @app.get("/valid/{user_id}")
 async def read_validation(
-    user_id: int = Path(  # ? Path Field used by Path Params
+    user_id: int = Path(  # ? Path field used by Path Params
         ..., title="ID for user id", description="USER ID"
     ),
     query: str | None = Query(None, alias="user-query"),
@@ -119,14 +177,13 @@ async def read_again(
 
 
 # ! if you use Annotated, no need of *
-""" Annotated is used to add extra metadata.
-"""
+""" Annotated is used to add extra metadata."""
 
 
 @app.get("/again/{user_id}")
 async def read_me_again(
     user_id: Annotated[
-        int, Path(..., title="ID for user id", description="USER ID", lt=15, gt=10)
+        int, Path(..., title="USER ID", description="ID for user id", lt=15, gt=10)
     ],
     query: str,
 ):
@@ -156,7 +213,7 @@ async def read_you(query: str = Query("fixed", min_length=3, max_length=10)):
 
 @app.get("/readwe")
 async def read_we(
-    query: str | None = Query(  # ? Query Field used by Query Params
+    query: str | None = Query(  # ? Query field used by Query Params
         ...,
         min_length=5,
         max_length=12,
@@ -870,23 +927,61 @@ async def hello_world():
     return f"HELLO WORLD"
 
 
+def get_another_query(query: str):
+    query = "another_query"
+    return {"query": query}
+
+
+def check_params(item_id: int | None = None):
+    if not item_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"ID not found"
+        )
+
+
 async def common_parameters(
     query: str | None = None,
     skip: int = 0,
     limit: int = 100,
+    another_query: str = Depends(get_another_query),
     sms: str = Depends(hello_world),
 ):
-    return {"query": query, "skip": skip, "limit": limit, "message": sms}
+    return {
+        "query": query,
+        "another_query": another_query,
+        "skip": skip,
+        "limit": limit,
+        "message": sms,
+    }
 
 
-@app.get("/item_dependencies")
+@app.get("/item_dependencies", dependencies=[Depends(check_params)])
 async def read_items(commons: dict = Depends(common_parameters)):
     return {"commons": commons}
-
 
 @app.get("/user_dependencies")
 async def read_users(commons: dict = Depends(common_parameters)):
     return commons
+
+# * Use Annotated
+@app.get("/item_dependencies2")
+async def read_items(commons: Annotated[dict, Depends(common_parameters)]):
+    return {"commons": commons}
+
+""" You can store dependencies as variable when using Annotated"""
+
+common_dependency = Annotated[dict, Depends(common_parameters)]
+
+@app.get("/item_dependencies3")
+async def read_items(commons:common_dependency):
+    return {"commons":commons}
+
+
+@app.get("/item_dependencies4")
+async def read_items(commons:common_dependency):
+    return {"commons":commons}
+
+
 
 
 # * Classes as Dependencies
@@ -1148,4 +1243,45 @@ async def general_route(
     }
 
 
-# : SQL RELATIONAL DATABASE
+# : BACKGROUND TASKS
+import time
+
+
+def send_message(message: str):
+    return message
+
+
+def notification_email(email: str, message=""):
+    with open("log.txt", mode="w") as email_file:
+        content = f"Notification for {email}: {message}"
+        time.sleep(5)
+        email_file.write(content)
+
+
+@app.post("/send/notification/", status_code=202)
+async def send_notification(
+    email: str, background_tasks: BackgroundTasks, message=Depends(send_message)
+):
+    background_tasks.add_task(notification_email, email, message=message)
+    return {"message": "Notification sent in the background"}
+
+
+def write_log(message: str):
+    with open("log.txt", mode="a") as log:
+        log.write(message)
+
+
+def get_query(background_tasks: BackgroundTasks, q: str | None = None):
+    if q:
+        message = f"found query: {q}\n"
+        background_tasks.add_task(write_log, message)
+    return q
+
+
+@app.post("/send-notification/{email}")
+async def notify_me(
+    email: str, background_tasks: BackgroundTasks, q: str = Depends(get_query)
+):
+    message = f"message to {email}"
+    background_tasks.add_task(write_log, message)
+    return {"message": message, "query": q}
