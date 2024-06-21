@@ -1,6 +1,6 @@
 from datetime import datetime, time, timedelta
 from enum import Enum
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal, Union
 from uuid import UUID
 from fastapi import (
     Body,
@@ -30,7 +30,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
 
-from fastapi import FastAPI
+app = FastAPI()
 
 description = """
 Various APIs that are built for learning purposes using Tutorial
@@ -93,6 +93,11 @@ app = FastAPI(
 @app.get("/items/{id}")
 async def main(id: int):
     return {"mimi": id}
+
+
+@app.get("/world/{greeting}")
+async def get_example(greeting: str = Path(title="Greeting")):
+    return f"Hello {greeting}"
 
 
 @app.get("/mimi/lody")
@@ -657,7 +662,7 @@ async def post_files(files: list[bytes] = File(...)):
 @app.post("/uploadfiles")
 async def upload_files(file: UploadFile | None = None):
     if not file:
-        return f"No file found"
+        return "No file found"
     return {"file": file.filename}
 
 
@@ -924,7 +929,7 @@ async def hello_world():
     """Dependencies
     You can nest dependencies
     """
-    return f"HELLO WORLD"
+    return "HELLO WORLD"
 
 
 def get_another_query(query: str):
@@ -935,7 +940,7 @@ def get_another_query(query: str):
 def check_params(item_id: int | None = None):
     if not item_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"ID not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="ID not found"
         )
 
 
@@ -959,29 +964,31 @@ async def common_parameters(
 async def read_items(commons: dict = Depends(common_parameters)):
     return {"commons": commons}
 
+
 @app.get("/user_dependencies")
 async def read_users(commons: dict = Depends(common_parameters)):
     return commons
+
 
 # * Use Annotated
 @app.get("/item_dependencies2")
 async def read_items(commons: Annotated[dict, Depends(common_parameters)]):
     return {"commons": commons}
 
+
 """ You can store dependencies as variable when using Annotated"""
 
 common_dependency = Annotated[dict, Depends(common_parameters)]
 
+
 @app.get("/item_dependencies3")
-async def read_items(commons:common_dependency):
-    return {"commons":commons}
+async def read_items(commons: common_dependency):
+    return {"commons": commons}
 
 
 @app.get("/item_dependencies4")
-async def read_items(commons:common_dependency):
-    return {"commons":commons}
-
-
+async def read_items(commons: common_dependency):
+    return {"commons": commons}
 
 
 # * Classes as Dependencies
